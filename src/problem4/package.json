@@ -1,0 +1,11 @@
+{
+  "name": "technical-test",
+  "version": "1.0.0",
+  "description": "Technical Test Solutions",
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "jest": "^27.3.1"
+  }
+}
