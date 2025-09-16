@@ -1,0 +1,94 @@
+# Development Docker Compose Configuration
+version: '3.8'
+
+services:
+  # Development application service with hot reloading
+  book-api-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: book-management-api-dev
+    ports:
+      - "3000:3000"
+      - "9229:9229"  # Node.js debugger port
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - JWT_SECRET=development-secret-key
+      - JWT_EXPIRES_IN=24h
+      - LOG_LEVEL=debug
+    volumes:
+      # Mount source code for hot reloading
+      - .:/app
+      - /app/node_modules  # Prevent overwriting node_modules
+      # Persist database
+      - ./books.db:/app/books.db
+      # Persist logs
+      - ./logs:/app/logs
+    restart: unless-stopped
+    command: npm run dev
+    networks:
+      - book-api-dev-network
+    stdin_open: true
+    tty: true
+
+  # Database viewer (optional - for development)
+  db-viewer:
+    image: coleifer/sqlite-web
+    container_name: book-api-db-viewer
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./books.db:/data/books.db
+    command: ["sqlite_web", "/data/books.db", "--host", "0.0.0.0", "--port", "8080"]
+    depends_on:
+      - book-api-dev
+    restart: unless-stopped
+    networks:
+      - book-api-dev-network
+    profiles:
+      - db-tools
+
+  # Test runner service
+  book-api-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: book-management-api-test
+    environment:
+      - NODE_ENV=test
+      - JWT_SECRET=test-secret-key
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm test
+    networks:
+      - book-api-dev-network
+    profiles:
+      - test
+
+  # Documentation service (serves API docs)
+  docs:
+    image: nginx:alpine
+    container_name: book-api-docs
+    ports:
+      - "8081:80"
+    volumes:
+      - ./README.md:/usr/share/nginx/html/README.md:ro
+      - ./swagger_UI.png:/usr/share/nginx/html/swagger_UI.png:ro
+    networks:
+      - book-api-dev-network
+    profiles:
+      - docs
+
+# Networks
+networks:
+  book-api-dev-network:
+    driver: bridge
+
+# Volumes for development
+volumes:
+  book-api-dev-node-modules:
+    driver: local

@@ -1,0 +1,78 @@
+# Production Docker Compose Configuration
+version: '3.8'
+
+services:
+  # Main application service
+  book-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: book-management-api
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET:-your-super-secure-secret-key-change-in-production}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-24h}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      # Persist database
+      - ./books.db:/app/books.db
+      # Persist logs
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - book-api-network
+
+  # Nginx reverse proxy (optional for production)
+  nginx:
+    image: nginx:alpine
+    container_name: book-api-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - book-api
+    restart: unless-stopped
+    networks:
+      - book-api-network
+    profiles:
+      - nginx
+
+  # Log aggregation service (optional)
+  fluentd:
+    image: fluent/fluentd:v1.16-debian-1
+    container_name: book-api-fluentd
+    volumes:
+      - ./fluentd.conf:/fluentd/etc/fluent.conf
+      - ./logs:/var/log/book-api
+    depends_on:
+      - book-api
+    restart: unless-stopped
+    networks:
+      - book-api-network
+    profiles:
+      - logging
+
+# Networks
+networks:
+  book-api-network:
+    driver: bridge
+
+# Volumes for data persistence
+volumes:
+  book-api-data:
+    driver: local
+  book-api-logs:
+    driver: local
