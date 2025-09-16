@@ -1,0 +1,18 @@
+sequenceDiagram
+  autonumber
+  participant U as User Browser/App
+  participant API as API Service
+  participant R as Redis (ZSET + Pub/Sub)
+  participant W as Worker (Persist)
+  participant DB as PostgreSQL
+
+  U->>API: POST /v1/scores/award {action_type, action_id, idempotency_key}
+  API->>API: Validate JWT, schema, rate limit
+  API->>API: Check idempotency & action replay
+  API->>API: points = rules[action_type]
+  API->>R: ZINCRBY leaderboard:global (user, +points)
+  API->>R: PUBLISH stream:leaderboard {user_id, delta, new_total}
+  API->>W: Enqueue persist({award_id, user_id, points, ...})
+  API-->>U: 200 {total, rank, leaderboard_top}
+  W->>DB: INSERT score_awards, UPSERT user_scores
+  Note over R,U: Other clients receive live `leaderboard.update` via SSE/WebSocket

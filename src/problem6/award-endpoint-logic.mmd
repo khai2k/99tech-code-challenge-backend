@@ -1,0 +1,12 @@
+flowchart TD
+  A[Request Received] --> B{JWT valid?}
+  B -- No --> E[401]
+  B -- Yes --> C{Schema & action_type valid?}
+  C -- No --> F[400/422]
+  C -- Yes --> D{Idempotency & replay?}
+  D -- Duplicate --> G[409]
+  D -- OK --> H[Compute points]
+  H --> I[ZINCRBY Redis]
+  I --> J[PUBLISH update]
+  J --> K[Enqueue persist job]
+  K --> L[Return 200/202]
